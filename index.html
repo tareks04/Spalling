@@ -112,6 +112,27 @@
   .q-dot.active{border-color:var(--grape);box-shadow:0 0 0 3px rgba(124,92,255,.3),2px 2px 0 var(--ink)}
   .q-dot.got-right{background:#E4FFF7;border-color:#0E9B8B}
   .q-dot.got-wrong{background:#FFECEC;border-color:#E24B4B}
+
+  /* Start MCQ modal */
+  .chooser-overlay{position:fixed;inset:0;z-index:95;display:flex;align-items:center;justify-content:center;
+                   background:rgba(35,35,64,.55);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .25s}
+  .chooser-overlay.open{opacity:1;pointer-events:auto}
+  .chooser-box{width:min(96vw,620px);max-height:88vh;overflow:hidden;background:#fff;border:3px solid var(--ink);
+               border-radius:24px;box-shadow:10px 10px 0 var(--ink);transform:translateY(24px) scale(.97);
+               transition:transform .28s cubic-bezier(.34,1.56,.64,1)}
+  .chooser-overlay.open .chooser-box{transform:translateY(0) scale(1)}
+  .chooser-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#7C5CFF;color:#fff;border-bottom:3px solid var(--ink)}
+  .chooser-body{padding:18px;overflow:auto;max-height:calc(88vh - 72px)}
+  .choose-letter{display:flex;flex-direction:column;align-items:center;justify-content:center;width:64px;height:68px;
+                 border:2.5px solid var(--ink);border-radius:14px;background:#fff;box-shadow:3px 3px 0 var(--ink);
+                 font-family:'Fredoka';font-weight:700;transition:.12s;cursor:pointer;user-select:none}
+  .choose-letter:hover:not(.disabled){transform:translateY(-2px);box-shadow:4px 5px 0 var(--ink)}
+  .choose-letter.selected{background:#E8E0FF;border-color:#7C5CFF;box-shadow:0 0 0 3px rgba(124,92,255,.25),3px 3px 0 var(--ink);color:#7C5CFF}
+  .choose-letter.disabled{opacity:.32;cursor:not-allowed;background:#f3f3f3}
+  .choose-count{font-size:11px;color:#666;font-family:'Nunito';font-weight:800}
+  .dots-scroll{max-height:108px;overflow-y:auto;border:2.5px solid var(--ink);border-radius:16px;background:#FFFDF8;box-shadow:3px 3px 0 var(--ink);padding:8px}
+  .goal-meter{height:22px;border:3px solid var(--ink);border-radius:999px;background:#fff;overflow:hidden;box-shadow:3px 3px 0 var(--ink)}
+  .goal-fill{height:100%;width:0%;background:repeating-linear-gradient(45deg,#17B8A6 0 14px,#46d2c4 14px 28px);transition:width .45s ease}
 </style>
 </head>
 <body>
@@ -135,6 +156,34 @@
     </div>
     <div class="modal-footer">
       <a id="dictLink" href="#" target="_blank" rel="noopener" class="text-sm font-bold" style="color:var(--grape)">Open in new tab ↗</a>
+    </div>
+  </div>
+</div>
+
+<!-- Start MCQ Modal -->
+<div id="startModal" class="chooser-overlay" onclick="if(event.target===this)closeStartModal()">
+  <div class="chooser-box">
+    <div class="chooser-head">
+      <div>
+        <div class="display text-lg">🎯 Start MCQ</div>
+        <div class="text-xs font-bold opacity-90">Select one or more starting letters</div>
+      </div>
+      <button class="modal-close" onclick="closeStartModal()">✕</button>
+    </div>
+    <div class="chooser-body">
+      <div class="flex flex-wrap gap-2 justify-between items-center mb-4">
+        <div class="font-bold text-slate-600">Selected letters: <span id="selectedLettersCount" class="text-[#7C5CFF]">0</span></div>
+        <div class="font-bold text-slate-600">Selected words: <span id="selectedWordsCount" class="text-[#17B8A6]">0</span></div>
+      </div>
+      <div class="flex flex-wrap gap-2 mb-4">
+        <button id="selectAllLettersBtn" class="btn px-3 py-2 bg-white text-sm">Select All</button>
+        <button id="clearLettersBtn" class="btn px-3 py-2 bg-white text-sm">Clear</button>
+      </div>
+      <div id="letterPickerGrid" class="flex flex-wrap gap-2 justify-center"></div>
+      <div class="mt-5 flex justify-end gap-3">
+        <button id="cancelStartBtn" class="btn px-4 py-2.5 bg-white text-sm">Cancel</button>
+        <button id="confirmStartBtn" class="btn px-5 py-2.5 text-white" style="background:#17B8A6">Start Selected MCQ →</button>
+      </div>
     </div>
   </div>
 </div>
@@ -204,9 +253,136 @@
           Click any floating letter in the background to practice words starting with that letter!
         </p>
         <div class="flex flex-wrap gap-3 justify-center">
-          <button id="startBtn" class="btn px-6 py-3 text-white text-lg" style="background:#7C5CFF">Start Quiz (All Words) →</button>
+          <button id="startBtn" class="btn px-6 py-3 text-white text-lg" style="background:#7C5CFF">Choose Letters & Start →</button>
           <button id="clearBankBtn" class="btn px-4 py-3 bg-white text-sm">Clear Bank</button>
         </div>
+      </div>
+    </div>
+
+    <!-- DMC GOAL -->
+    <div class="paper p-6 sm:p-7 mb-6 overflow-hidden">
+      <div class="tape left"></div>
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-2xl">🎯</span>
+        <h2 class="display text-xl font-semibold">DMC Goal</h2>
+        <span id="goalPctTag" class="ml-auto tag" style="background:#17B8A6;color:#fff">0%</span>
+      </div>
+      <p class="text-sm text-slate-500 font-bold mb-3">Attend every word at least once (right or wrong) to reach <b>100%</b> and touch your DMC dream!</p>
+
+      <!-- Illustrated goal scene -->
+      <div class="relative mb-2" style="height:120px">
+        <svg id="goalSvg" viewBox="0 0 600 130" class="w-full h-full" style="display:block" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <!-- Sweat drops animation -->
+            <style>
+              @keyframes sweatFall{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(10px)}}
+              .sweat{animation:sweatFall 1.2s ease-in infinite}
+              .sweat2{animation:sweatFall 1.2s ease-in .4s infinite}
+              @keyframes legRun{0%,100%{transform:rotate(0deg)}25%{transform:rotate(18deg)}75%{transform:rotate(-18deg)}}
+              .leg1{animation:legRun .6s ease-in-out infinite;transform-origin:68px 90px}
+              .leg2{animation:legRun .6s ease-in-out .3s infinite;transform-origin:78px 90px}
+              @keyframes armReach{0%,100%{transform:rotate(0deg)}50%{transform:rotate(-8deg)}}
+              .armReach{animation:armReach .8s ease-in-out infinite;transform-origin:85px 60px}
+              @keyframes bodyBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+              .bodyBob{animation:bodyBob .6s ease-in-out infinite}
+              @keyframes glow{0%,100%{filter:drop-shadow(0 0 6px rgba(255,177,0,.3))}50%{filter:drop-shadow(0 0 16px rgba(255,177,0,.8))}}
+              .dmcGlow{animation:glow 2s ease-in-out infinite}
+            </style>
+          </defs>
+
+          <!-- Ground / path -->
+          <line x1="40" y1="115" x2="560" y2="115" stroke="#232340" stroke-width="3" stroke-dasharray="12 6" opacity=".25"/>
+
+          <!-- Side-view struggling runner (positioned by JS based on progress) -->
+          <g id="goalMan" class="bodyBob">
+            <!-- Shadow -->
+            <ellipse cx="86" cy="118" rx="24" ry="5" fill="#232340" opacity=".12"/>
+
+            <!-- Rear leg -->
+            <g class="leg1" style="transform-origin:84px 89px">
+              <line x1="84" y1="89" x2="65" y2="113" stroke="#232340" stroke-width="4.5" stroke-linecap="round"/>
+              <line x1="65" y1="113" x2="78" y2="113" stroke="#232340" stroke-width="4.5" stroke-linecap="round"/>
+            </g>
+
+            <!-- Front leg -->
+            <g class="leg2" style="transform-origin:88px 90px">
+              <line x1="88" y1="90" x2="102" y2="113" stroke="#232340" stroke-width="4.5" stroke-linecap="round"/>
+              <line x1="102" y1="113" x2="114" y2="111" stroke="#232340" stroke-width="4.5" stroke-linecap="round"/>
+            </g>
+
+            <!-- Rear arm -->
+            <g style="transform-origin:78px 65px">
+              <line x1="79" y1="64" x2="62" y2="80" stroke="#FFD6A5" stroke-width="5.5" stroke-linecap="round"/>
+              <line x1="79" y1="64" x2="62" y2="80" stroke="#232340" stroke-width="7" stroke-linecap="round" opacity=".13"/>
+            </g>
+
+            <!-- Leaning body -->
+            <path d="M68 56 Q82 48 96 54 L101 84 Q83 94 65 82 Z" fill="#3DA9FC" stroke="#232340" stroke-width="2.5" stroke-linejoin="round"/>
+            <path d="M73 59 Q84 55 94 60" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" opacity=".7"/>
+
+            <!-- Neck -->
+            <line x1="92" y1="53" x2="100" y2="46" stroke="#FFD6A5" stroke-width="5" stroke-linecap="round"/>
+
+            <!-- Head side profile -->
+            <circle cx="111" cy="35" r="16" fill="#FFD6A5" stroke="#232340" stroke-width="2.5"/>
+            <path d="M98 32 Q103 18 116 20 Q127 21 127 35 Q121 28 111 28 Q103 28 98 32 Z" fill="#232340"/>
+            <circle cx="116" cy="34" r="2.5" fill="#232340"/>
+            <line x1="112" y1="29" x2="119" y2="31" stroke="#232340" stroke-width="2" stroke-linecap="round"/>
+            <path d="M126 38 Q131 40 126 43" fill="none" stroke="#232340" stroke-width="2" stroke-linecap="round"/>
+            <ellipse id="goalMouth" cx="122" cy="46" rx="3.5" ry="2.2" fill="#E24B4B" stroke="#232340" stroke-width="1"/>
+
+            <!-- Front arm reaching forward -->
+            <g class="armReach" style="transform-origin:96px 61px">
+              <line x1="95" y1="60" x2="124" y2="50" stroke="#FFD6A5" stroke-width="5.5" stroke-linecap="round"/>
+              <line x1="95" y1="60" x2="124" y2="50" stroke="#232340" stroke-width="7" stroke-linecap="round" opacity=".13"/>
+              <circle cx="127" cy="49" r="5" fill="#FFD6A5" stroke="#232340" stroke-width="2"/>
+              <line x1="129" y1="45" x2="133" y2="41" stroke="#FFD6A5" stroke-width="2.5" stroke-linecap="round"/>
+              <line x1="131" y1="48" x2="136" y2="46" stroke="#FFD6A5" stroke-width="2.5" stroke-linecap="round"/>
+            </g>
+
+            <!-- Sweat drops -->
+            <g class="sweat"><path d="M100 20 Q98 27 100 27 Q102 27 100 20Z" fill="#3DA9FC"/></g>
+            <g class="sweat2"><path d="M130 26 Q128 33 130 33 Q132 33 130 26Z" fill="#3DA9FC"/></g>
+
+            <!-- Motion / effort lines behind -->
+            <line x1="48" y1="52" x2="60" y2="48" stroke="#FFB100" stroke-width="2" stroke-linecap="round" opacity=".7"/>
+            <line x1="42" y1="64" x2="57" y2="64" stroke="#FFB100" stroke-width="2" stroke-linecap="round" opacity=".5"/>
+            <line x1="50" y1="76" x2="61" y2="80" stroke="#FFB100" stroke-width="2" stroke-linecap="round" opacity=".4"/>
+          </g>
+
+          <!-- DMC Badge (always at the right end) -->
+          <g transform="translate(530, 42)" class="dmcGlow">
+            <!-- Shield shape -->
+            <path d="M0 0 L40 0 L40 48 L20 62 L0 48 Z" fill="#FFB100" stroke="#232340" stroke-width="3" stroke-linejoin="round"/>
+            <!-- Inner shield -->
+            <path d="M6 6 L34 6 L34 44 L20 55 L6 44 Z" fill="#fff" stroke="none"/>
+            <!-- DMC text -->
+            <text x="20" y="24" text-anchor="middle" font-family="Fredoka,sans-serif" font-size="13" font-weight="700" fill="#232340">DMC</text>
+            <!-- Medical cross -->
+            <rect x="15" y="30" width="10" height="14" rx="1.5" fill="#E24B4B"/>
+            <rect x="13" y="34" width="14" height="6" rx="1.5" fill="#E24B4B"/>
+            <!-- Stethoscope icon -->
+            <circle cx="20" cy="52" r="3.5" fill="none" stroke="#232340" stroke-width="1.8"/>
+            <path d="M17 52 Q12 42 20 38" fill="none" stroke="#232340" stroke-width="1.8" stroke-linecap="round"/>
+            <!-- Star sparkles -->
+            <path d="M-8 10 l2.5 5 5 2.5 -5 2.5 -2.5 5 -2.5 -5 -5 -2.5 5 -2.5z" fill="#FFB100" stroke="#232340" stroke-width="1.2"/>
+            <path d="M48 5 l2 4 4 2 -4 2 -2 4 -2 -4 -4 -2 4 -2z" fill="#FF6B57" stroke="#232340" stroke-width="1"/>
+            <path d="M44 50 l1.5 3 3 1.5 -3 1.5 -1.5 3 -1.5 -3 -3 -1.5 3 -1.5z" fill="#17B8A6" stroke="#232340" stroke-width="1"/>
+          </g>
+
+          <!-- Dotted trail from man to DMC -->
+          <line id="goalTrail" x1="120" y1="80" x2="520" y2="80" stroke="#7C5CFF" stroke-width="2.5" stroke-dasharray="6 8" opacity=".3"/>
+        </svg>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="goal-meter mb-3">
+        <div id="goalFill" class="goal-fill"></div>
+      </div>
+      <div class="flex flex-wrap justify-between gap-2 text-sm font-extrabold">
+        <span>Attended: <span id="goalDone" class="text-[#17B8A6]">0</span></span>
+        <span>Total Words: <span id="goalTotal" class="text-[#7C5CFF]">0</span></span>
+        <span>Remaining: <span id="goalRemain" class="text-[#FF6B57]">0</span></span>
       </div>
     </div>
 
@@ -235,7 +411,9 @@
       </div>
 
       <!-- Question dots for navigation -->
-      <div id="qDots" class="flex flex-wrap gap-1.5 justify-center mb-4"></div>
+      <div class="dots-scroll mb-4">
+        <div id="qDots" class="flex flex-wrap gap-1.5 justify-center"></div>
+      </div>
 
       <!-- Progress -->
       <div class="track mb-6">
@@ -339,6 +517,49 @@ function updateBankStats() {
   $('startBtn').disabled = wordBank.length === 0;
 }
 
+/* ========== DMC GOAL (ALL WORDS ATTENDED) ========== */
+let goalSeen = JSON.parse(localStorage.getItem('spellQuizGoalSeen') || '{}');
+function saveGoalSeen() { localStorage.setItem('spellQuizGoalSeen', JSON.stringify(goalSeen)); }
+function markGoalSeen(word) {
+  goalSeen[word.toLowerCase()] = true;
+  saveGoalSeen();
+}
+function renderGoalCard() {
+  const total = wordBank.length;
+  const done = wordBank.filter(w => goalSeen[w.toLowerCase()]).length;
+  const remain = Math.max(total - done, 0);
+  const pct = total ? Math.round(done / total * 100) : 0;
+  $('goalDone').textContent = done;
+  $('goalTotal').textContent = total;
+  $('goalRemain').textContent = remain;
+  $('goalPctTag').textContent = pct + '%';
+  $('goalFill').style.width = pct + '%';
+  $('goalPctTag').style.background = pct === 100 ? '#FFB100' : pct >= 60 ? '#17B8A6' : pct >= 30 ? '#3DA9FC' : '#FF6B57';
+
+  // Move the struggling runner along the path (x from 0 to ~400)
+  const manEl = $('goalMan');
+  if (manEl) {
+    const xOffset = Math.round((pct / 100) * 400);
+    manEl.setAttribute('transform', 'translate(' + xOffset + ', 0)');
+    const mouth = $('goalMouth');
+    if (pct === 100) {
+      manEl.classList.remove('bodyBob');
+      if (mouth) {
+        mouth.setAttribute('rx', '4.6');
+        mouth.setAttribute('ry', '1.3');
+        mouth.setAttribute('cy', '47');
+      }
+    } else {
+      if (!manEl.classList.contains('bodyBob')) manEl.classList.add('bodyBob');
+      if (mouth) {
+        mouth.setAttribute('rx', '3.5');
+        mouth.setAttribute('ry', '2.2');
+        mouth.setAttribute('cy', '46');
+      }
+    }
+  }
+}
+
 /* ========== A–Z TRACKER (LOCALSTORAGE) ========== */
 let tracker = JSON.parse(localStorage.getItem('spellQuizTracker') || '{}');
 // tracker = { A: { correct: 5, wrong: 2 }, B: { correct: 3, wrong: 0 }, ... }
@@ -362,8 +583,7 @@ function renderTrackerGrid() {
     const total = data.correct + data.wrong;
     const cell = document.createElement('div');
     cell.className = 'tracker-cell';
-    
-    // Color: no data = white, mostly correct = green, mostly wrong = red, mixed = yellow
+
     if (total === 0) {
       cell.style.background = '#f8f8f8';
       cell.style.color = '#aaa';
@@ -379,12 +599,72 @@ function renderTrackerGrid() {
         <span class="tracker-correct">✓${data.correct}</span>
         <span class="tracker-wrong">✗${data.wrong}</span>
       </div>`;
-    
-    // Tooltip
+
     const bankWords = wordBank.filter(w => w[0].toUpperCase() === ch);
     cell.title = `${ch}: ${data.correct} correct, ${data.wrong} wrong | ${bankWords.length} word(s) in bank`;
     grid.appendChild(cell);
   }
+}
+
+/* ========== START MODAL / LETTER SELECTION ========== */
+let selectedStartLetters = new Set();
+function availableLetters() {
+  const counts = {};
+  for (let i = 0; i < 26; i++) counts[String.fromCharCode(65 + i)] = 0;
+  wordBank.forEach(w => { const ch = w[0].toUpperCase(); if (counts[ch] != null) counts[ch]++; });
+  return counts;
+}
+function updateStartModalCounts() {
+  const counts = availableLetters();
+  const selectedWords = wordBank.filter(w => selectedStartLetters.has(w[0].toUpperCase())).length;
+  $('selectedLettersCount').textContent = selectedStartLetters.size;
+  $('selectedWordsCount').textContent = selectedWords;
+  $('confirmStartBtn').disabled = selectedWords === 0;
+}
+function renderStartLetterPicker() {
+  const counts = availableLetters();
+  const grid = $('letterPickerGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 26; i++) {
+    const ch = String.fromCharCode(65 + i);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'choose-letter';
+    btn.innerHTML = `<span style="font-size:22px">${ch}</span><span class="choose-count">${counts[ch]}</span>`;
+    if (counts[ch] === 0) btn.classList.add('disabled');
+    if (selectedStartLetters.has(ch)) btn.classList.add('selected');
+    btn.addEventListener('click', () => {
+      if (counts[ch] === 0) return;
+      if (selectedStartLetters.has(ch)) selectedStartLetters.delete(ch);
+      else selectedStartLetters.add(ch);
+      renderStartLetterPicker();
+      updateStartModalCounts();
+    });
+    grid.appendChild(btn);
+  }
+}
+function openStartModal(presetLetters = null) {
+  const counts = availableLetters();
+  selectedStartLetters = new Set();
+  if (Array.isArray(presetLetters) && presetLetters.length) {
+    presetLetters.forEach(ch => { if (counts[ch] > 0) selectedStartLetters.add(ch); });
+  } else {
+    Object.keys(counts).forEach(ch => { if (counts[ch] > 0) selectedStartLetters.add(ch); });
+  }
+  renderStartLetterPicker();
+  updateStartModalCounts();
+  $('startModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeStartModal() {
+  $('startModal').classList.remove('open');
+  if (!$('dictModal').classList.contains('open')) document.body.style.overflow = '';
+}
+function startSelectedLettersQuiz() {
+  const words = wordBank.filter(w => selectedStartLetters.has(w[0].toUpperCase()));
+  if (!words.length) return;
+  closeStartModal();
+  startQuiz(words);
 }
 
 /* ========== FLOATING BACKGROUND LETTERS ========== */
@@ -408,8 +688,7 @@ function renderTrackerGrid() {
           alert(`No saved words starting with "${letter}". Add some to your Word Bank first!`);
           return;
         }
-        if (confirm(`Start a quiz with ${subset.length} word(s) starting with "${letter}"?`))
-          startQuiz(subset);
+        openStartModal([letter]);
       }
     });
     box.appendChild(s);
@@ -649,8 +928,9 @@ function choose(btn, opt) {
   answers[current] = { answered: true, correct: isCorrect, chosen: opt };
   answered = true;
 
-  // Record to tracker
+  // Record trackers
   recordAnswer(q.word, isCorrect);
+  markGoalSeen(q.word);
 
   const kids = [...$('options').children];
   kids.forEach(b => {
@@ -758,18 +1038,36 @@ $('saveBtn').addEventListener('click', () => {
   words.forEach(w => { if (!existing.has(w.toLowerCase())) { wordBank.push(w); existing.add(w.toLowerCase()); added++; } });
   localStorage.setItem('spellQuizWords', JSON.stringify(wordBank));
   $('input').value = '';
-  updateBankStats(); renderTrackerGrid();
+  updateBankStats(); renderGoalCard(); renderTrackerGrid();
   const orig = $('saveBtn').innerHTML;
   $('saveBtn').innerHTML = `✅ Saved ${added} new word${added !== 1 ? 's' : ''}!`;
   setTimeout(() => $('saveBtn').innerHTML = orig, 2500);
 });
 
-$('startBtn').addEventListener('click', () => { if (wordBank.length > 0) startQuiz(wordBank); });
+$('startBtn').addEventListener('click', () => {
+  if (wordBank.length > 0) openStartModal();
+});
+
+$('selectAllLettersBtn').addEventListener('click', () => {
+  selectedStartLetters = new Set(Object.keys(availableLetters()).filter(ch => availableLetters()[ch] > 0));
+  renderStartLetterPicker();
+  updateStartModalCounts();
+});
+$('clearLettersBtn').addEventListener('click', () => {
+  selectedStartLetters = new Set();
+  renderStartLetterPicker();
+  updateStartModalCounts();
+});
+$('cancelStartBtn').addEventListener('click', closeStartModal);
+$('confirmStartBtn').addEventListener('click', startSelectedLettersQuiz);
 
 $('clearBankBtn').addEventListener('click', () => {
   if (confirm('Clear all saved words from your Word Bank?')) {
-    wordBank = []; localStorage.setItem('spellQuizWords', '[]');
-    updateBankStats(); renderTrackerGrid();
+    wordBank = [];
+    goalSeen = {};
+    localStorage.setItem('spellQuizWords', '[]');
+    saveGoalSeen();
+    updateBankStats(); renderGoalCard(); renderTrackerGrid();
   }
 });
 
@@ -786,13 +1084,14 @@ $('sampleBtn').addEventListener('click', () => {
 
 $('prevBtn').addEventListener('click', prev);
 $('nextBtn').addEventListener('click', next);
-$('quitBtn').addEventListener('click', () => { if ('speechSynthesis' in window) speechSynthesis.cancel(); renderTrackerGrid(); show('setup'); });
+$('quitBtn').addEventListener('click', () => { if ('speechSynthesis' in window) speechSynthesis.cancel(); renderGoalCard(); renderTrackerGrid(); show('setup'); });
 $('speakBtn').addEventListener('click', speak);
 $('retryAll').addEventListener('click', () => startQuiz(lastWords));
 $('retryMissed').addEventListener('click', () => startQuiz(missed.map(m => m.word)));
-$('newBtn').addEventListener('click', () => { renderTrackerGrid(); show('setup'); });
+$('newBtn').addEventListener('click', () => { renderGoalCard(); renderTrackerGrid(); show('setup'); });
 
 document.addEventListener('keydown', e => {
+  if ($('startModal').classList.contains('open') && e.key === 'Escape') closeStartModal();
   if (!$('quiz').classList.contains('hidden')) {
     const k = e.key.toLowerCase();
     if (!answered && ['a','b','c','d','1','2','3','4'].includes(k)) {
@@ -806,6 +1105,7 @@ document.addEventListener('keydown', e => {
 
 // Initialize
 updateBankStats();
+renderGoalCard();
 renderTrackerGrid();
 </script>
 </body>
