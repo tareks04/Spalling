@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpellQuiz – Spelling MCQ Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{--ink:#232340;--cream:#FFF7EA;--sun:#FFB100;--coral:#FF6B57;--mint:#17B8A6;--grape:#7C5CFF;--sky:#3DA9FC}
+  html,body{overflow-x:hidden}
+  body{font-family:'Nunito',system-ui,sans-serif;color:var(--ink);background-color:var(--cream);
+       background-image:radial-gradient(#f0dfc4 1.6px,transparent 1.6px);background-size:26px 26px;min-height:100vh}
+  h1,h2,h3,.display{font-family:'Fredoka',system-ui,sans-serif}
+
+  /* Floating Letters */
+  #bgLetters{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+  .fl{position:absolute;font-family:'Fredoka';font-weight:700;line-height:1;opacity:.25;
+      animation:drift linear infinite;will-change:transform;
+      pointer-events:auto;cursor:pointer;transition:opacity .2s, text-shadow .2s}
+  .fl:hover{opacity:.9;text-shadow:0 0 15px currentColor;z-index:50}
+  @keyframes drift{0%{transform:translate3d(0,110vh,0) rotate(0deg)}100%{transform:translate3d(0,-25vh,0) rotate(360deg)}}
+
+  main{position:relative;z-index:1}
+  .paper{background:#fff;border:3px solid var(--ink);border-radius:26px;box-shadow:8px 8px 0 var(--ink);position:relative}
+  .tape{position:absolute;width:120px;height:32px;background:rgba(255,177,0,.75);
+        border:2px dashed rgba(35,35,64,.35);top:-17px;left:50%;transform:translateX(-50%) rotate(-2deg);border-radius:3px;backdrop-filter:blur(1px)}
+  .tape.left{left:26px;transform:rotate(-8deg)}
+  .tape.right{left:auto;right:26px;transform:rotate(7deg)}
+  .btn{border:3px solid var(--ink);border-radius:16px;font-family:'Fredoka';font-weight:600;
+       box-shadow:0 5px 0 var(--ink);transition:.12s;position:relative;top:0;cursor:pointer}
+  .btn:hover:not(:disabled){transform:translateY(2px);box-shadow:0 3px 0 var(--ink)}
+  .btn:active:not(:disabled){transform:translateY(5px);box-shadow:0 0 0 var(--ink)}
+  .btn:disabled{opacity:0.45;cursor:not-allowed;box-shadow:0 5px 0 var(--ink);transform:none}
+
+  .opt{border:3px solid var(--ink);border-radius:18px;background:#fff;
+       box-shadow:0 5px 0 var(--ink);transition:.13s;position:relative;cursor:pointer}
+  .opt:not(:disabled):hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
+  .opt:not(:disabled):active{transform:translate(0,3px);box-shadow:0 2px 0 var(--ink)}
+  .opt.correct{background:#E4FFF7;border-color:#0E9B8B;box-shadow:0 5px 0 #0E9B8B}
+  .opt.wrong{background:#FFECEC;border-color:#E24B4B;box-shadow:0 5px 0 #E24B4B}
+  .opt.reviewed{opacity:.6}
+  .badge{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+         font-family:'Fredoka';font-weight:700;font-size:20px;color:#fff;flex-shrink:0;
+         border:3px solid var(--ink);box-shadow:2px 2px 0 var(--ink)}
+
+  .pop{animation:pop .3s ease both}
+  @keyframes pop{0%{transform:scale(.96);opacity:0}60%{transform:scale(1.03)}100%{transform:scale(1);opacity:1}}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+  .shake{animation:shake .3s}
+
+  .track{position:relative;height:34px;background:#fff;border:3px solid var(--ink);border-radius:20px;overflow:visible}
+  .fill{position:absolute;inset:0;width:0;border-radius:16px;
+        background:repeating-linear-gradient(45deg,var(--sun) 0 12px,#FFC85C 12px 24px);
+        border-right:3px solid var(--ink);transition:width .45s cubic-bezier(.22,1,.36,1)}
+  .pencil{position:absolute;top:50%;transform:translate(-50%,-50%);transition:left .45s cubic-bezier(.22,1,.36,1);z-index:2}
+  .stamp{font-family:'Fredoka';font-weight:700;border:4px solid;border-radius:14px;
+         padding:6px 18px;display:inline-block;letter-spacing:1px;animation:stampIn .35s cubic-bezier(.34,1.56,.64,1)}
+  @keyframes stampIn{0%{transform:scale(2.2) rotate(-14deg);opacity:0}60%{transform:scale(.94) rotate(-6deg);opacity:1}100%{transform:scale(1) rotate(-4deg);opacity:1}}
+  .tag{background:#fff;border:2px solid var(--ink);border-radius:999px;padding:4px 13px;font-weight:700;font-size:14px;box-shadow:2px 2px 0 var(--ink)}
+
+  #confetti{position:fixed;inset:0;pointer-events:none;z-index:60}
+  .ring{filter:drop-shadow(3px 3px 0 var(--ink))}
+  textarea:focus{outline:none;border-color:var(--grape)}
+
+  /* Dictionary Modal */
+  .modal-overlay{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;
+                  background:rgba(35,35,64,.55);backdrop-filter:blur(6px);opacity:0;pointer-events:none;transition:opacity .25s}
+  .modal-overlay.open{opacity:1;pointer-events:auto}
+  .modal-box{width:95%;max-width:480px;max-height:88vh;background:#fff;border:3px solid var(--ink);
+             border-radius:22px;box-shadow:10px 10px 0 var(--ink);display:flex;flex-direction:column;
+             transform:translateY(30px) scale(.96);transition:transform .3s cubic-bezier(.34,1.56,.64,1);overflow:hidden}
+  .modal-overlay.open .modal-box{transform:translateY(0) scale(1)}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;
+                border-bottom:3px solid var(--ink);background:var(--grape);color:#fff;flex-shrink:0}
+  .modal-close{width:36px;height:36px;border-radius:10px;background:#fff;color:var(--ink);
+               border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;
+               font-weight:900;font-size:18px;cursor:pointer;box-shadow:2px 2px 0 var(--ink);transition:.1s}
+  .modal-close:hover{transform:scale(1.1)}
+  .modal-body{flex:1;overflow:auto;position:relative;min-height:300px}
+  .modal-body iframe{width:100%;height:100%;min-height:450px;border:none}
+  .modal-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:#fff}
+  .modal-loading.hide{display:none}
+  .spinner{width:44px;height:44px;border:5px solid #eee;border-top-color:var(--grape);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .modal-footer{padding:10px 16px;border-top:3px solid var(--ink);background:#f9f7f2;text-align:center;flex-shrink:0}
+
+  .meaning-link{display:inline-flex;align-items:center;gap:4px;margin-left:auto;padding:5px 12px;
+                 border-radius:10px;background:var(--grape);color:#fff;font-family:'Fredoka';font-weight:600;
+                 font-size:14px;border:2px solid var(--ink);box-shadow:2px 2px 0 var(--ink);
+                 cursor:pointer;transition:.1s;text-decoration:none;white-space:nowrap}
+  .meaning-link:hover{transform:translateY(-1px);box-shadow:3px 3px 0 var(--ink)}
+
+  /* Tracker Grid */
+  .tracker-cell{display:flex;flex-direction:column;align-items:center;justify-content:center;
+                 width:48px;height:62px;border-radius:12px;border:2.5px solid var(--ink);
+                 box-shadow:3px 3px 0 var(--ink);font-family:'Fredoka';font-weight:700;
+                 position:relative;transition:.15s;cursor:default}
+  .tracker-cell:hover{transform:translateY(-2px);box-shadow:4px 5px 0 var(--ink)}
+  .tracker-letter{font-size:18px;line-height:1}
+  .tracker-nums{display:flex;gap:4px;font-size:11px;margin-top:2px}
+  .tracker-correct{color:#0E9B8B}
+  .tracker-wrong{color:#E24B4B}
+
+  /* Question dots */
+  .q-dot{width:28px;height:28px;border-radius:50%;border:2.5px solid var(--ink);display:flex;align-items:center;
+         justify-content:center;font-family:'Fredoka';font-size:12px;font-weight:700;cursor:pointer;transition:.12s;
+         box-shadow:2px 2px 0 var(--ink)}
+  .q-dot:hover{transform:scale(1.15)}
+  .q-dot.active{border-color:var(--grape);box-shadow:0 0 0 3px rgba(124,92,255,.3),2px 2px 0 var(--ink)}
+  .q-dot.got-right{background:#E4FFF7;border-color:#0E9B8B}
+  .q-dot.got-wrong{background:#FFECEC;border-color:#E24B4B}
+</style>
+</head>
+<body>
+
+<div id="bgLetters"></div>
+<canvas id="confetti"></canvas>
+
+<!-- Dictionary Modal -->
+<div id="dictModal" class="modal-overlay" onclick="if(event.target===this)closeDict()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="display text-lg" id="dictTitle">📖 Dictionary</span>
+      <button class="modal-close" onclick="closeDict()">✕</button>
+    </div>
+    <div class="modal-body" id="dictBody">
+      <div class="modal-loading" id="dictLoading">
+        <div class="spinner"></div>
+        <span class="font-bold text-slate-500">Loading meaning…</span>
+      </div>
+      <iframe id="dictFrame" title="Dictionary"></iframe>
+    </div>
+    <div class="modal-footer">
+      <a id="dictLink" href="#" target="_blank" rel="noopener" class="text-sm font-bold" style="color:var(--grape)">Open in new tab ↗</a>
+    </div>
+  </div>
+</div>
+
+<main class="max-w-2xl mx-auto px-4 py-8">
+
+  <!-- HERO -->
+  <header class="text-center mb-6">
+    <svg viewBox="0 0 340 150" class="w-56 sm:w-72 mx-auto mb-1" role="img" aria-label="Alphabet blocks and pencil">
+      <g stroke="#232340" stroke-width="3.5" stroke-linejoin="round">
+        <path d="M32 34 l4 9 9 4 -9 4 -4 9 -4 -9 -9 -4 9 -4z" fill="#FFB100"/>
+        <path d="M306 22 l3.5 8 8 3.5 -8 3.5 -3.5 8 -3.5 -8 -8 -3.5 8 -3.5z" fill="#FF6B57"/>
+        <path d="M262 62 l3 6.5 6.5 3 -6.5 3 -3 6.5 -3 -6.5 -6.5 -3 6.5 -3z" fill="#17B8A6"/>
+        <rect x="72" y="30" width="60" height="60" rx="10" fill="#7C5CFF"/>
+        <text x="102" y="72" font-family="Fredoka,sans-serif" font-size="34" font-weight="700" fill="#fff" text-anchor="middle" stroke="none">A</text>
+        <rect x="208" y="30" width="60" height="60" rx="10" fill="#17B8A6"/>
+        <text x="238" y="72" font-family="Fredoka,sans-serif" font-size="34" font-weight="700" fill="#fff" text-anchor="middle" stroke="none">C</text>
+        <rect x="140" y="62" width="64" height="64" rx="11" fill="#FFB100"/>
+        <text x="172" y="107" font-family="Fredoka,sans-serif" font-size="36" font-weight="700" fill="#232340" text-anchor="middle" stroke="none">B</text>
+        <g transform="rotate(-32 60 118)">
+          <rect x="24" y="104" width="72" height="24" rx="6" fill="#FF6B57"/>
+          <rect x="96" y="104" width="16" height="24" fill="#F4B7C4"/>
+          <rect x="112" y="104" width="12" height="24" rx="4" fill="#8B93A7"/>
+          <path d="M24 104 L2 116 L24 128 Z" fill="#F7E3B8"/>
+          <path d="M12 111 L2 116 L12 121 Z" fill="#232340"/>
+        </g>
+        <path d="M60 140 q26 -12 52 0 t52 0 t52 0" fill="none" stroke="#3DA9FC" stroke-width="4" stroke-linecap="round"/>
+      </g>
+    </svg>
+    <h1 class="text-5xl font-bold tracking-tight" style="color:var(--ink)">Spell<span style="color:var(--coral)">Quiz</span></h1>
+    <p class="text-slate-600 mt-1 font-semibold">Build your personal word bank & practice your spelling.</p>
+  </header>
+
+  <!-- SETUP -->
+  <section id="setup">
+    <!-- Input Card -->
+    <div class="paper p-6 sm:p-7 mb-6">
+      <div class="tape"></div>
+      <div class="flex items-center gap-3 mb-1">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#7C5CFF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 20l4-1L20 7a2.1 2.1 0 0 0-3-3L5 16z"/><path d="M14 6l3 3"/>
+        </svg>
+        <label for="input" class="display text-xl font-semibold">Add to Word Bank</label>
+      </div>
+      <p class="text-sm text-slate-500 mb-3 pl-9">Paste or type words separated by commas. Click Save to store in your browser.</p>
+      <textarea id="input" rows="3" placeholder="Access, Necessary, Accommodate, Receive..."
+        class="w-full p-3 text-lg font-semibold bg-[#FFFDF8]"
+        style="border:3px solid #ccc;border-radius:16px"></textarea>
+      <div class="flex flex-wrap gap-x-6 gap-y-2 mt-3 text-sm font-bold">
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="rawMode" class="w-5 h-5 accent-[#7C5CFF]"> Raw text mode (split on spaces too)</label>
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+          <input type="checkbox" id="shuffleQ" class="w-5 h-5 accent-[#FF6B57]" checked> Shuffle questions</label>
+      </div>
+      <div class="flex flex-wrap gap-3 mt-4">
+        <button id="saveBtn" class="btn flex-1 py-3.5 text-lg text-white" style="background:#17B8A6">📥 Save Words</button>
+        <button id="sampleBtn" class="btn py-3.5 px-5" style="background:#FFB100">✨ Sample</button>
+      </div>
+      <p id="err" class="text-[#E24B4B] text-sm mt-3 font-bold hidden"></p>
+
+      <!-- Word Bank Stats -->
+      <div class="mt-5 p-5 text-center" style="background:#F3F7FF;border:3px dashed #B9C6E6;border-radius:18px">
+        <p class="display text-xl font-semibold text-slate-700 mb-1">
+          Your Word Bank: <span id="bankCount" class="text-[#7C5CFF] text-2xl font-bold">0</span> words
+        </p>
+        <p class="text-sm text-slate-500 mb-4 font-bold max-w-sm mx-auto leading-relaxed">
+          Click any floating letter in the background to practice words starting with that letter!
+        </p>
+        <div class="flex flex-wrap gap-3 justify-center">
+          <button id="startBtn" class="btn px-6 py-3 text-white text-lg" style="background:#7C5CFF">Start Quiz (All Words) →</button>
+          <button id="clearBankBtn" class="btn px-4 py-3 bg-white text-sm">Clear Bank</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- A–Z PERFORMANCE TRACKER -->
+    <div class="paper p-6 sm:p-7">
+      <div class="tape right"></div>
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-2xl">📊</span>
+        <h2 class="display text-xl font-semibold">A–Z Performance Tracker</h2>
+        <button id="clearTrackerBtn" class="ml-auto text-xs btn px-3 py-1.5 bg-white" style="font-size:12px">Reset Stats</button>
+      </div>
+      <p class="text-sm text-slate-500 mb-4 font-bold">See how many words you got right <span class="tracker-correct">✓</span> vs wrong <span class="tracker-wrong">✗</span> for each starting letter. Red cells = need more practice!</p>
+      <div id="trackerGrid" class="flex flex-wrap gap-2 justify-center"></div>
+    </div>
+  </section>
+
+  <!-- QUIZ -->
+  <section id="quiz" class="hidden">
+    <div class="paper p-6 sm:p-7">
+      <div class="tape left"></div>
+
+      <!-- Top bar -->
+      <div class="flex items-center justify-between mb-2">
+        <span class="tag" id="qnum" style="background:#3DA9FC;color:#fff">Q 1/1</span>
+        <span class="tag" id="scoreTag" style="background:#17B8A6;color:#fff">Score 0</span>
+      </div>
+
+      <!-- Question dots for navigation -->
+      <div id="qDots" class="flex flex-wrap gap-1.5 justify-center mb-4"></div>
+
+      <!-- Progress -->
+      <div class="track mb-6">
+        <div id="bar" class="fill"></div>
+        <div id="pencilEl" class="pencil" style="left:0%">
+          <svg width="40" height="26" viewBox="0 0 40 26">
+            <g stroke="#232340" stroke-width="2.5" stroke-linejoin="round">
+              <rect x="14" y="6" width="18" height="14" rx="3" fill="#FF6B57"/>
+              <path d="M14 6 L2 13 L14 20 Z" fill="#F7E3B8"/>
+              <path d="M8 9.5 L2 13 L8 16.5 Z" fill="#232340"/>
+              <rect x="32" y="6" width="5" height="14" rx="2" fill="#8B93A7"/>
+            </g>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Question -->
+      <div class="flex items-start justify-center gap-3 text-center mb-1">
+        <svg class="mt-1 shrink-0" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#FFB100" stroke-width="2.6" stroke-linecap="round">
+          <circle cx="10.5" cy="10.5" r="6.5" fill="#FFF3D6"/><path d="M15.5 15.5L21 21"/>
+        </svg>
+        <h2 class="display text-2xl sm:text-3xl font-semibold leading-tight">Which spelling is correct?</h2>
+      </div>
+      <div class="text-center mb-5">
+        <button id="speakBtn" class="tag inline-flex items-center gap-2 py-2 px-4" style="background:#FFE9E5;cursor:pointer">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="#FF6B57" stroke="#232340" stroke-width="1.6" stroke-linejoin="round">
+            <path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 8.5a5 5 0 0 1 0 7" fill="none" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          Hear the word
+        </button>
+      </div>
+
+      <div id="options" class="grid gap-3"></div>
+      <div id="feedback" class="mt-5 text-center min-h-[3rem] flex items-center justify-center"></div>
+
+      <!-- Navigation: Prev / Quit / Next -->
+      <div class="flex items-center justify-between mt-3 gap-2">
+        <button id="prevBtn" class="btn px-5 py-2.5 bg-white text-sm" disabled>← Prev</button>
+        <button id="quitBtn" class="btn px-4 py-2.5 bg-white text-sm" style="background:#FFECEC">✕ Quit</button>
+        <button id="nextBtn" class="btn px-5 py-2.5 text-white text-sm" style="background:#17B8A6">Next →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="result" class="hidden">
+    <div class="paper p-6 sm:p-8 text-center">
+      <div class="tape right"></div>
+      <svg viewBox="0 0 200 130" class="w-44 mx-auto mb-1" role="img" aria-label="Trophy">
+        <g stroke="#232340" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+          <path d="M62 18 h76 v22 a38 38 0 0 1 -76 0z" fill="#FFB100"/>
+          <path d="M62 24 H44 a18 18 0 0 0 20 24" fill="none"/>
+          <path d="M138 24 h18 a18 18 0 0 1 -20 24" fill="none"/>
+          <rect x="92" y="78" width="16" height="16" fill="#FFB100"/>
+          <rect x="74" y="94" width="52" height="14" rx="5" fill="#7C5CFF"/>
+          <rect x="64" y="108" width="72" height="14" rx="6" fill="#17B8A6"/>
+          <path d="M100 30 l4.5 9 9 4.5 -9 4.5 -4.5 9 -4.5 -9 -9 -4.5 9 -4.5z" fill="#fff"/>
+          <path d="M28 34 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z" fill="#FF6B57"/>
+          <path d="M172 26 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3z" fill="#3DA9FC"/>
+        </g>
+      </svg>
+      <h2 class="text-3xl font-bold" style="color:var(--grape)">Quiz Complete!</h2>
+      <div class="flex justify-center my-4">
+        <svg width="150" height="150" viewBox="0 0 120 120" class="ring">
+          <circle cx="60" cy="60" r="50" fill="#fff" stroke="#232340" stroke-width="4"/>
+          <circle id="ringBg" cx="60" cy="60" r="44" fill="none" stroke="#EFEAE0" stroke-width="13"/>
+          <circle id="ringFg" cx="60" cy="60" r="44" fill="none" stroke="#17B8A6" stroke-width="13"
+                  stroke-linecap="round" stroke-dasharray="276.5" stroke-dashoffset="276.5"
+                  transform="rotate(-90 60 60)" style="transition:stroke-dashoffset 1s ease"/>
+          <text id="ringPct" x="60" y="66" text-anchor="middle" font-family="Fredoka,sans-serif"
+                font-size="27" font-weight="700" fill="#232340">0%</text>
+        </svg>
+      </div>
+      <p class="text-lg font-extrabold">
+        You scored <span id="finalScore" class="text-[#0E9B8B]">0</span> out of <span id="finalTotal">0</span>
+      </p>
+      <p id="msg" class="text-slate-500 font-semibold mb-2"></p>
+      <div id="review" class="text-left mt-4 space-y-2"></div>
+      <div class="flex flex-wrap gap-3 mt-6 justify-center">
+        <button id="retryAll" class="btn px-5 py-3 text-white" style="background:#7C5CFF">↻ Try Again</button>
+        <button id="retryMissed" class="btn px-5 py-3 text-white hidden" style="background:#FF6B57">Retry Missed</button>
+        <button id="newBtn" class="btn px-5 py-3" style="background:#FFB100">Back Home</button>
+      </div>
+    </div>
+  </section>
+
+  <footer class="text-center text-xs font-bold text-slate-400 mt-6 tracking-wide">
+    WRONG OPTIONS ARE GENERATED AUTOMATICALLY · CLICK THE CORRECT WORD TO SEE BANGLA MEANING
+  </footer>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const rand = n => Math.floor(Math.random() * n);
+const shuffle = arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = rand(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+/* ========== WORD BANK (LOCALSTORAGE) ========== */
+let wordBank = JSON.parse(localStorage.getItem('spellQuizWords') || '[]');
+function updateBankStats() {
+  $('bankCount').textContent = wordBank.length;
+  $('startBtn').disabled = wordBank.length === 0;
+}
+
+/* ========== A–Z TRACKER (LOCALSTORAGE) ========== */
+let tracker = JSON.parse(localStorage.getItem('spellQuizTracker') || '{}');
+// tracker = { A: { correct: 5, wrong: 2 }, B: { correct: 3, wrong: 0 }, ... }
+
+function saveTracker() { localStorage.setItem('spellQuizTracker', JSON.stringify(tracker)); }
+
+function recordAnswer(word, isCorrect) {
+  const letter = word[0].toUpperCase();
+  if (!tracker[letter]) tracker[letter] = { correct: 0, wrong: 0 };
+  if (isCorrect) tracker[letter].correct++;
+  else tracker[letter].wrong++;
+  saveTracker();
+}
+
+function renderTrackerGrid() {
+  const grid = $('trackerGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 26; i++) {
+    const ch = String.fromCharCode(65 + i);
+    const data = tracker[ch] || { correct: 0, wrong: 0 };
+    const total = data.correct + data.wrong;
+    const cell = document.createElement('div');
+    cell.className = 'tracker-cell';
+    
+    // Color: no data = white, mostly correct = green, mostly wrong = red, mixed = yellow
+    if (total === 0) {
+      cell.style.background = '#f8f8f8';
+      cell.style.color = '#aaa';
+    } else {
+      const ratio = data.correct / total;
+      if (ratio >= 0.7) { cell.style.background = '#E4FFF7'; cell.style.color = '#0E9B8B'; }
+      else if (ratio >= 0.4) { cell.style.background = '#FFF8E1'; cell.style.color = '#B8860B'; }
+      else { cell.style.background = '#FFECEC'; cell.style.color = '#E24B4B'; }
+    }
+
+    cell.innerHTML = `<span class="tracker-letter">${ch}</span>
+      <div class="tracker-nums">
+        <span class="tracker-correct">✓${data.correct}</span>
+        <span class="tracker-wrong">✗${data.wrong}</span>
+      </div>`;
+    
+    // Tooltip
+    const bankWords = wordBank.filter(w => w[0].toUpperCase() === ch);
+    cell.title = `${ch}: ${data.correct} correct, ${data.wrong} wrong | ${bankWords.length} word(s) in bank`;
+    grid.appendChild(cell);
+  }
+}
+
+/* ========== FLOATING BACKGROUND LETTERS ========== */
+(function () {
+  const box = $('bgLetters'), chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const colors = ['#7C5CFF','#FF6B57','#17B8A6','#3DA9FC','#FFB100'];
+  for (let i = 0; i < 26; i++) {
+    const s = document.createElement('span'); s.className = 'fl';
+    const letter = chars[rand(26)];
+    s.textContent = letter;
+    s.title = `Practice words starting with "${letter}"`;
+    s.style.left = rand(100) + 'vw';
+    s.style.fontSize = (30 + rand(80)) + 'px';
+    s.style.color = colors[rand(colors.length)];
+    s.style.animationDuration = (22 + rand(28)) + 's';
+    s.style.animationDelay = -rand(40) + 's';
+    s.addEventListener('click', () => {
+      if ($('quiz').classList.contains('hidden') && $('result').classList.contains('hidden')) {
+        const subset = wordBank.filter(w => w[0].toUpperCase() === letter);
+        if (subset.length === 0) {
+          alert(`No saved words starting with "${letter}". Add some to your Word Bank first!`);
+          return;
+        }
+        if (confirm(`Start a quiz with ${subset.length} word(s) starting with "${letter}"?`))
+          startQuiz(subset);
+      }
+    });
+    box.appendChild(s);
+  }
+})();
+
+/* ========== CONFETTI ========== */
+const cvs = $('confetti'), ctx = cvs.getContext('2d');
+let parts = [];
+function sizeCanvas() { cvs.width = innerWidth; cvs.height = innerHeight; }
+sizeCanvas(); addEventListener('resize', sizeCanvas);
+function burst(x, y, n = 46) {
+  const cols = ['#FFB100','#FF6B57','#17B8A6','#7C5CFF','#3DA9FC'];
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 9;
+    parts.push({ x, y, vx: Math.cos(a)*sp, vy: Math.sin(a)*sp - 4,
+      s: 5+Math.random()*7, c: cols[rand(cols.length)], r: Math.random()*6,
+      vr: (Math.random()-.5)*.4, life: 1 });
+  }
+}
+(function loop() {
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  parts = parts.filter(p => p.life > 0);
+  parts.forEach(p => {
+    p.vy += .32; p.vx *= .99; p.x += p.vx; p.y += p.vy; p.r += p.vr; p.life -= .011;
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+    ctx.globalAlpha = Math.max(p.life, 0); ctx.fillStyle = p.c;
+    ctx.fillRect(-p.s/2, -p.s/2, p.s, p.s*.62); ctx.restore();
+  });
+  requestAnimationFrame(loop);
+})();
+
+/* ========== DICTIONARY MODAL ========== */
+function openDict(word) {
+  const url = 'https://www.english-bangla.com/dictionary/' + encodeURIComponent(word.toLowerCase());
+  $('dictTitle').textContent = '📖 ' + word;
+  $('dictLink').href = url;
+  $('dictLoading').classList.remove('hide');
+  const f = $('dictFrame');
+  f.src = url;
+  f.onload = () => $('dictLoading').classList.add('hide');
+  setTimeout(() => $('dictLoading').classList.add('hide'), 5000);
+  $('dictModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeDict() {
+  $('dictModal').classList.remove('open');
+  $('dictFrame').src = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('dictModal').classList.contains('open')) closeDict(); });
+
+/* ========== WORD PARSING ========== */
+function parseWords() {
+  const raw = $('input').value;
+  const sep = $('rawMode').checked ? /[,;\n\r\t ]+/ : /[,;\n\r\t]+/;
+  const seen = new Set(), out = [];
+  raw.split(sep).forEach(p => {
+    const w = p.trim().replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, '').replace(/\s+/g, ' ');
+    if (!w || !/[A-Za-z]/.test(w)) return;
+    const k = w.toLowerCase();
+    if (!seen.has(k)) { seen.add(k); out.push(w); }
+  });
+  return out;
+}
+
+/* ========== SUBTLE MISSPELLING ENGINE ========== */
+function applyCase(orig, mis) {
+  if (orig === orig.toUpperCase() && orig.length > 1) return mis.toUpperCase();
+  if (orig[0] === orig[0].toUpperCase() && orig[0] !== orig[0].toLowerCase())
+    return mis[0].toUpperCase() + mis.slice(1);
+  return mis;
+}
+function makeDistractors(word, n = 3) {
+  const w = word.toLowerCase(), seen = new Set([w]), pool = [];
+  function add(m, type, pri) {
+    if (!m || m === w || seen.has(m) || m.length < 2) return;
+    if (/(.)\1\1/.test(m)) return;
+    seen.add(m); pool.push({ m, type, pri });
+  }
+  for (let i = 0; i < w.length - 1; i++) { if (w[i] === w[i + 1]) add(w.slice(0, i) + w.slice(i + 1), 'collapse', 1); }
+  const dbl = 'bcdfglmnprstvz';
+  for (let i = 0; i < w.length; i++) { const c = w[i]; if (dbl.includes(c) && w[i-1] !== c && (w[i+1]||'') !== c) add(w.slice(0,i+1)+c+w.slice(i+1),'double',1); }
+  const PATS=[['ie','ei'],['ei','ie'],['tion','sion'],['sion','tion'],['ance','ence'],['ence','ance'],['ant','ent'],['ent','ant'],['able','ible'],['ible','able'],['ous','us'],['us','ous'],['se','ce'],['ce','se'],['al','el'],['el','al'],['er','ar'],['ar','er'],['or','ar'],['ph','f'],['ght','t'],['ck','k'],['k','ck'],['ary','ery'],['ery','ary'],['ally','aly'],['ely','ly'],['ment','mant'],['mant','ment']];
+  for (const [from, to] of PATS) { let idx = w.indexOf(from); while (idx >= 0) { add(w.slice(0,idx)+to+w.slice(idx+from.length),'pattern',1); idx = w.indexOf(from,idx+1); } }
+  const VSWAP = { a:['e'], e:['a','i'], i:['e'], o:['u'], u:['o'] };
+  for (let i = 0; i < w.length; i++) { if (VSWAP[w[i]]) for (const v of VSWAP[w[i]]) add(w.slice(0,i)+v+w.slice(i+1),'vowel',2); }
+  for (let i = 0; i < w.length; i++) { if (w[i]==='c'&&'eiy'.includes(w[i+1]||'')) add(w.slice(0,i)+'s'+w.slice(i+1),'cs',2); if (w[i]==='s'&&'eiy'.includes(w[i+1]||'')) add(w.slice(0,i)+'c'+w.slice(i+1),'cs',2); }
+  for (let i = 1; i < w.length - 1; i++) add(w.slice(0,i)+w.slice(i+1),'drop',3);
+  for (let i = 1; i < w.length - 2; i++) { if (w[i] !== w[i+1]) add(w.slice(0,i)+w[i+1]+w[i]+w.slice(i+2),'swap',3); }
+  for (let p = 1; p <= 3; p++) { const sub = pool.filter(c => c.pri===p); const sh = shuffle(sub); let j=0; for (let i=0;i<pool.length;i++) { if(pool[i].pri===p) pool[i]=sh[j++]; } }
+  pool.sort((a, b) => a.pri - b.pri);
+  const result = [], usedTypes = new Set();
+  for (const c of pool) { if (result.length >= n) break; if (!usedTypes.has(c.type)) { usedTypes.add(c.type); result.push(c.m); } }
+  for (const c of pool) { if (result.length >= n) break; if (!result.includes(c.m)) result.push(c.m); }
+  const LETTERS = 'abcdefghijklmnopqrstuvwxyz'; let tries = 0;
+  while (result.length < n && tries < 200) { tries++; const i = 1+rand(w.length-1); const m = w.slice(0,i)+LETTERS[rand(26)]+w.slice(i+1); if (m !== w && !result.includes(m)) result.push(m); }
+  return result.slice(0, n).map(m => applyCase(word, m));
+}
+
+/* ========== QUIZ STATE ========== */
+let questions = [], current = 0, score = 0, answered = false, missed = [], lastWords = [];
+// Per-question answer state: answers[i] = { answered:bool, correct:bool, chosen:string|null }
+let answers = [];
+const STICKER = ['#FFB100','#17B8A6','#7C5CFF','#FF6B57'];
+const buildQuestions = words => words.map(w => ({ word: w, options: shuffle([w, ...makeDistractors(w)]) }));
+const show = id => { ['setup','quiz','result'].forEach(s => $(s).classList.toggle('hidden', s !== id)); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+function startQuiz(words) {
+  lastWords = words.slice();
+  const list = $('shuffleQ').checked ? shuffle(words) : words;
+  questions = buildQuestions(list);
+  answers = questions.map(() => ({ answered: false, correct: false, chosen: null }));
+  current = 0; score = 0; missed = [];
+  show('quiz');
+  renderDots();
+  renderQuestion();
+}
+
+function setProgress(pct) {
+  $('bar').style.width = pct + '%';
+  $('pencilEl').style.left = Math.max(2, Math.min(96, pct)) + '%';
+}
+
+/* Question dots */
+function renderDots() {
+  const box = $('qDots'); box.innerHTML = '';
+  questions.forEach((q, i) => {
+    const d = document.createElement('div');
+    d.className = 'q-dot';
+    d.textContent = i + 1;
+    if (i === current) d.classList.add('active');
+    if (answers[i].answered) d.classList.add(answers[i].correct ? 'got-right' : 'got-wrong');
+    d.style.background = d.style.background || '#fff';
+    d.addEventListener('click', () => goTo(i));
+    box.appendChild(d);
+  });
+}
+
+function updateDots() {
+  const dots = $('qDots').children;
+  for (let i = 0; i < dots.length; i++) {
+    dots[i].classList.toggle('active', i === current);
+    dots[i].classList.remove('got-right', 'got-wrong');
+    if (answers[i].answered) dots[i].classList.add(answers[i].correct ? 'got-right' : 'got-wrong');
+  }
+}
+
+function goTo(idx) {
+  if (idx < 0 || idx >= questions.length) return;
+  current = idx;
+  renderQuestion();
+  updateDots();
+}
+
+function updateNav() {
+  $('prevBtn').disabled = current === 0;
+
+  const allAnswered = answers.every(a => a.answered);
+  if (allAnswered) {
+    $('nextBtn').textContent = 'Finish ✓';
+    $('nextBtn').style.background = '#FF6B57';
+    $('nextBtn').disabled = false;
+  } else if (current === questions.length - 1) {
+    // On last question but not all answered
+    $('nextBtn').textContent = 'Finish ✓';
+    $('nextBtn').style.background = '#17B8A6';
+    $('nextBtn').disabled = !answers.every(a => a.answered);
+  } else {
+    $('nextBtn').textContent = 'Next →';
+    $('nextBtn').style.background = '#17B8A6';
+    $('nextBtn').disabled = false;
+  }
+
+  $('qnum').textContent = `Q ${current + 1}/${questions.length}`;
+  const answeredCount = answers.filter(a => a.answered).length;
+  score = answers.filter(a => a.correct).length;
+  $('scoreTag').textContent = `Score ${score}`;
+  setProgress(answeredCount / questions.length * 100);
+}
+
+function renderQuestion() {
+  answered = answers[current].answered;
+  const q = questions[current];
+  $('feedback').innerHTML = '';
+  updateNav();
+
+  const box = $('options'); box.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const b = document.createElement('button');
+    b.className = 'opt pop flex items-center gap-4 text-left px-4 py-3.5 w-full';
+    b.style.animationDelay = (i * 60) + 'ms';
+    const badge = document.createElement('span');
+    badge.className = 'badge'; badge.style.background = STICKER[i];
+    badge.textContent = 'ABCD'[i];
+    const txt = document.createElement('span');
+    txt.className = 'text-xl sm:text-2xl font-semibold';
+    txt.textContent = opt;
+    b.append(badge, txt);
+    b.dataset.value = opt;
+
+    if (answered) {
+      // Show previous answer state
+      b.disabled = true;
+      if (opt === q.word) {
+        b.classList.add('correct');
+        badge.style.background = '#0E9B8B';
+        const link = document.createElement('span');
+        link.className = 'meaning-link'; link.innerHTML = '📖 অর্থ'; link.title = 'See Bangla meaning';
+        link.addEventListener('click', (e) => { e.stopPropagation(); openDict(q.word); });
+        b.appendChild(link);
+      }
+      if (opt === answers[current].chosen && !answers[current].correct) {
+        b.classList.add('wrong');
+        badge.style.background = '#E24B4B';
+      }
+      b.classList.add('reviewed');
+
+      if (answers[current].correct) {
+        $('feedback').innerHTML = '<span class="stamp" style="color:#0E9B8B;border-color:#0E9B8B;background:#E4FFF7">✓ CORRECT!</span>';
+      } else {
+        $('feedback').innerHTML = '<span class="stamp" style="color:#E24B4B;border-color:#E24B4B;background:#FFECEC">✗ NOT QUITE</span>' +
+          '<span class="ml-3 font-extrabold text-lg" style="color:#0E9B8B">"' + q.word + '"</span>';
+      }
+    } else {
+      b.addEventListener('click', () => choose(b, opt));
+    }
+
+    box.appendChild(b);
+  });
+}
+
+function choose(btn, opt) {
+  if (answers[current].answered) return;
+  const q = questions[current];
+  const isCorrect = opt === q.word;
+  answers[current] = { answered: true, correct: isCorrect, chosen: opt };
+  answered = true;
+
+  // Record to tracker
+  recordAnswer(q.word, isCorrect);
+
+  const kids = [...$('options').children];
+  kids.forEach(b => {
+    b.disabled = true;
+    if (b.dataset.value === q.word) {
+      b.classList.add('correct');
+      b.querySelector('.badge').style.background = '#0E9B8B';
+      const link = document.createElement('span');
+      link.className = 'meaning-link'; link.innerHTML = '📖 অর্থ'; link.title = 'See Bangla meaning';
+      link.addEventListener('click', (e) => { e.stopPropagation(); openDict(q.word); });
+      b.appendChild(link);
+    }
+  });
+
+  if (isCorrect) {
+    const r = btn.getBoundingClientRect();
+    burst(r.left + r.width / 2, r.top + r.height / 2, 55);
+    $('feedback').innerHTML = '<span class="stamp" style="color:#0E9B8B;border-color:#0E9B8B;background:#E4FFF7">✓ CORRECT!</span>';
+  } else {
+    missed.push({ word: q.word, chose: opt });
+    btn.classList.add('wrong', 'shake');
+    btn.querySelector('.badge').style.background = '#E24B4B';
+    $('feedback').innerHTML = '<span class="stamp" style="color:#E24B4B;border-color:#E24B4B;background:#FFECEC">✗ NOT QUITE</span>' +
+      '<span class="ml-3 font-extrabold text-lg" style="color:#0E9B8B">"' + q.word + '"</span>';
+  }
+
+  updateNav();
+  updateDots();
+}
+
+function next() {
+  const allAnswered = answers.every(a => a.answered);
+  if (allAnswered && (current === questions.length - 1 || $('nextBtn').textContent === 'Finish ✓')) {
+    finish();
+  } else if (current < questions.length - 1) {
+    current++;
+    renderQuestion();
+    updateDots();
+  }
+}
+function prev() {
+  if (current > 0) { current--; renderQuestion(); updateDots(); }
+}
+
+function finish() {
+  score = answers.filter(a => a.correct).length;
+  missed = [];
+  answers.forEach((a, i) => {
+    if (a.answered && !a.correct) missed.push({ word: questions[i].word, chose: a.chosen });
+  });
+
+  show('result');
+  const total = questions.length, pct = score / total;
+  $('finalScore').textContent = score; $('finalTotal').textContent = total;
+  $('msg').textContent = pct === 1 ? '🏆 Flawless — perfect spelling!'
+    : pct >= .7 ? '🎉 Great job, keep it up!'
+    : pct >= .4 ? '👍 Good effort — practise these words.'
+    : '💪 Keep going, you will improve!';
+  const C = 2 * Math.PI * 44;
+  setTimeout(() => {
+    $('ringFg').setAttribute('stroke-dashoffset', C * (1 - pct));
+    $('ringFg').setAttribute('stroke', pct === 1 ? '#FFB100' : pct >= .7 ? '#17B8A6' : pct >= .4 ? '#FF6B57' : '#E24B4B');
+  }, 120);
+  $('ringPct').textContent = Math.round(pct * 100) + '%';
+  if (pct >= .7) setTimeout(() => burst(innerWidth / 2, innerHeight * .3, 90), 250);
+
+  const r = $('review'); r.innerHTML = '';
+  if (missed.length) {
+    const h = document.createElement('h3');
+    h.className = 'display font-semibold text-lg mb-1'; h.style.color = '#E24B4B';
+    h.textContent = '📖 Words to review:'; r.appendChild(h);
+    missed.forEach(m => {
+      const d = document.createElement('div');
+      d.className = 'flex justify-between items-center gap-3 px-4 py-2.5 rounded-xl';
+      d.style.cssText = 'background:#FFECEC;border:2px solid #232340;box-shadow:3px 3px 0 #232340';
+      const a = document.createElement('span'); a.className = 'font-bold line-through'; a.style.color = '#E24B4B'; a.textContent = m.chose;
+      const arw = document.createElement('span'); arw.textContent = '→'; arw.className = 'font-bold';
+      const b = document.createElement('span');
+      b.className = 'font-extrabold cursor-pointer hover:underline'; b.style.color = '#0E9B8B';
+      b.textContent = m.word; b.title = 'Click to see Bangla meaning';
+      b.addEventListener('click', () => openDict(m.word));
+      d.append(a, arw, b); r.appendChild(d);
+    });
+  }
+  $('retryMissed').classList.toggle('hidden', missed.length === 0);
+
+  // Refresh tracker grid on home when we go back
+  renderTrackerGrid();
+}
+
+function speak() {
+  if (!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(questions[current].word);
+  u.lang = 'en-US'; u.rate = .85;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+/* ========== EVENTS ========== */
+$('saveBtn').addEventListener('click', () => {
+  const words = parseWords();
+  if (!words.length) { $('err').textContent = 'Please enter some words to save.'; $('err').classList.remove('hidden'); return; }
+  $('err').classList.add('hidden');
+  const existing = new Set(wordBank.map(w => w.toLowerCase()));
+  let added = 0;
+  words.forEach(w => { if (!existing.has(w.toLowerCase())) { wordBank.push(w); existing.add(w.toLowerCase()); added++; } });
+  localStorage.setItem('spellQuizWords', JSON.stringify(wordBank));
+  $('input').value = '';
+  updateBankStats(); renderTrackerGrid();
+  const orig = $('saveBtn').innerHTML;
+  $('saveBtn').innerHTML = `✅ Saved ${added} new word${added !== 1 ? 's' : ''}!`;
+  setTimeout(() => $('saveBtn').innerHTML = orig, 2500);
+});
+
+$('startBtn').addEventListener('click', () => { if (wordBank.length > 0) startQuiz(wordBank); });
+
+$('clearBankBtn').addEventListener('click', () => {
+  if (confirm('Clear all saved words from your Word Bank?')) {
+    wordBank = []; localStorage.setItem('spellQuizWords', '[]');
+    updateBankStats(); renderTrackerGrid();
+  }
+});
+
+$('clearTrackerBtn').addEventListener('click', () => {
+  if (confirm('Reset all your A–Z performance stats?')) {
+    tracker = {}; saveTracker(); renderTrackerGrid();
+  }
+});
+
+$('sampleBtn').addEventListener('click', () => {
+  $('input').value = 'Access, Necessary, Accommodate, Receive, Separate, Definitely, Occurrence, Embarrass, Occasionally, Environment, Altitude, Astonishing, Believe, Business';
+  const r = $('sampleBtn').getBoundingClientRect(); burst(r.left + r.width / 2, r.top + r.height / 2, 30);
+});
+
+$('prevBtn').addEventListener('click', prev);
+$('nextBtn').addEventListener('click', next);
+$('quitBtn').addEventListener('click', () => { if ('speechSynthesis' in window) speechSynthesis.cancel(); renderTrackerGrid(); show('setup'); });
+$('speakBtn').addEventListener('click', speak);
+$('retryAll').addEventListener('click', () => startQuiz(lastWords));
+$('retryMissed').addEventListener('click', () => startQuiz(missed.map(m => m.word)));
+$('newBtn').addEventListener('click', () => { renderTrackerGrid(); show('setup'); });
+
+document.addEventListener('keydown', e => {
+  if (!$('quiz').classList.contains('hidden')) {
+    const k = e.key.toLowerCase();
+    if (!answered && ['a','b','c','d','1','2','3','4'].includes(k)) {
+      const i = 'abcd'.includes(k) ? 'abcd'.indexOf(k) : Number(k) - 1;
+      const b = $('options').children[i]; if (b && !b.disabled) b.click();
+    } else if (e.key === 'ArrowRight') next();
+    else if (e.key === 'ArrowLeft') prev();
+    else if (e.key === 'Enter' && answered) next();
+  }
+});
+
+// Initialize
+updateBankStats();
+renderTrackerGrid();
+</script>
+</body>
+</html>
